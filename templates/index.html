@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operasi Morfologi - Kelompok 7</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+    <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+        <p style="margin-top: 15px; font-weight: 600;">Sedang Memproses...</p>
+    </div>
+
+    <div class="app-container">
+        <aside class="sidebar">
+            
+            <div class="brand-container">
+                <div class="brand-title">Operasi Morfologi</div>
+                <div class="brand-credit">Crafted by Kelompok 7</div>
+            </div>
+
+            <form action="/analyze" method="POST" enctype="multipart/form-data">
+                
+                <div class="form-group">
+                    <label>Input Gambar</label>
+                    <div class="file-upload-wrapper">
+                        <input type="file" name="image" accept="image/*" required id="fileInput">
+                        <div class="upload-text">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <span id="fileName">Klik atau Drag gambar ke sini</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Mode Warna</label>
+                    <select name="mode">
+                        <option value="rgb">RGB (Warna Asli)</option>
+                        <option value="gray">Grayscale (Hitam Putih)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Operasi Morfologi</label>
+                    <select name="operation" id="operation-select">
+                        <option value="dilation" {% if operation == 'dilation' %}selected{% endif %}>Dilation (Dilasi)</option>
+                        <option value="erosion" {% if operation == 'erosion' %}selected{% endif %}>Erosion (Erosi)</option>
+                        <option value="opening" {% if operation == 'opening' %}selected{% endif %}>Opening</option>
+                        <option value="closing" {% if operation == 'closing' %}selected{% endif %}>Closing</option>
+                    </select>
+                    <div class="info-card" id="operation-info">
+                        Pilih operasi untuk melihat penjelasan.
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>
+                        Ukuran Kernel: <span id="kernel-display">{{ kernel_size if kernel_size else 3 }}</span> px
+                    </label>
+                    <input type="range" name="kernel" min="1" max="15" step="2" value="{{ kernel_size if kernel_size else 3 }}" id="kernel-slider">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: #888; margin-top: 5px;">
+                        <span>1x1</span>
+                        <span>15x15</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-analyze">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Analisis Sekarang
+                </button>
+            </form>
+        </aside>
+
+        <main class="main-content">
+            <div class="workspace-header">
+                <h2>Workspace</h2>
+                {% if result_image %}
+                <div class="badge">
+                    <i class="fa-solid fa-check"></i> Selesai: {{ operation|capitalize }} ({{ kernel_size }}x{{ kernel_size }})
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="comparison-container">
+                <div class="image-card">
+                    <h3><i class="fa-regular fa-image"></i> Original</h3>
+                    <div class="img-wrapper">
+                        {% if original_image %}
+                            <img src="{{ original_image }}" alt="Original Image" id="preview-image">
+                        {% else %}
+                            <img id="preview-image" style="display: none;">
+                            <div id="placeholder-original" style="color: #ccc;">
+                                <i class="fa-solid fa-image fa-3x"></i><br>Belum ada gambar
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="image-card">
+                    <h3><i class="fa-solid fa-shapes"></i> Result</h3>
+                    <div class="img-wrapper">
+                        {% if result_image %}
+                            <img src="{{ result_image }}?t={{ range(1, 10000) | random }}" alt="Result Image">
+                        {% else %}
+                            <div style="color: #ccc;">
+                                <i class="fa-solid fa-flask fa-3x"></i><br>Hasil akan muncul di sini
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 1. Logic untuk Preview Gambar saat Upload
+        const fileInput = document.getElementById('fileInput');
+        const previewImage = document.getElementById('preview-image');
+        const fileNameSpan = document.getElementById('fileName');
+        const placeholderOrig = document.getElementById('placeholder-original');
+
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                fileNameSpan.textContent = file.name;
+                previewImage.src = URL.createObjectURL(file);
+                previewImage.style.display = 'block';
+                if(placeholderOrig) placeholderOrig.style.display = 'none';
+            }
+        });
+
+        // 2. Logic Slider Kernel
+        const slider = document.getElementById('kernel-slider');
+        const display = document.getElementById('kernel-display');
+        slider.addEventListener('input', function() {
+            display.textContent = this.value;
+        });
+
+        // 3. Logic Penjelasan Operasi
+        const opSelect = document.getElementById('operation-select');
+        const opInfo = document.getElementById('operation-info');
+        
+        const infoText = {
+            dilation: "Menambah piksel pada batas objek. Berguna untuk menutup lubang kecil atau mempertebal garis.",
+            erosion: "Mengikis piksel pada batas objek. Berguna untuk menghilangkan noise kecil (bintik putih) di latar belakang.",
+            opening: "Erosi diikuti Dilasi. Efektif menghilangkan noise di latar belakang tanpa mengubah ukuran objek utama.",
+            closing: "Dilasi diikuti Erosi. Efektif menutup lubang kecil di dalam objek (foreground) tanpa mengubah ukuran objek."
+        };
+
+        function updateInfo() {
+            opInfo.textContent = infoText[opSelect.value];
+        }
+
+        opSelect.addEventListener('change', updateInfo);
+        updateInfo();
+
+        // 4. Loading Spinner
+        document.querySelector('form').addEventListener('submit', function() {
+            document.getElementById('loading').style.display = 'flex';
+        });
+    </script>
+</body>
+</html>
